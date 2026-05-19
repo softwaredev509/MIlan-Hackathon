@@ -706,7 +706,6 @@ let wordCount = 0;
 let latencies = [];
 let sessionStart = null;
 let sessionTimer = null;
-let thinkStart = null;
 let thinkingEl = null;
 
 // ── WS URL (same host) ─────────────────────────────────────────────────────────
@@ -725,7 +724,8 @@ async function startRecording() {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   } catch (e) {
-    alert("Microphone access denied: " + e.message);
+    document.getElementById("partial-text").textContent = "Microphone error: " + e.message;
+    setStatus("ERROR", false);
     return;
   }
 
@@ -753,9 +753,16 @@ async function startRecording() {
     };
   };
 
-  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
-  ws.onerror   = (e) => console.error("WS error", e);
-  ws.onclose   = ()  => { if (isRecording) stopRecording(); };
+  ws.onmessage = (e) => {
+    try { handleMessage(JSON.parse(e.data)); }
+    catch (err) { console.error("Message parse error", err); }
+  };
+  ws.onerror = (e) => {
+    console.error("WS error", e);
+    setStatus("ERROR", false);
+    document.getElementById("partial-text").textContent = "Connection error — please retry.";
+  };
+  ws.onclose = () => { if (isRecording) stopRecording(); };
 
   isRecording = true;
   sessionStart = Date.now();
@@ -803,28 +810,40 @@ function handleMessage(msg) {
       break;
 
     case "thinking":
-      thinkStart = Date.now();
       thinkingEl = addThinking();
       break;
 
     case "agent_reply":
       if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
-      if (thinkStart) {
-        const lat = ((Date.now() - thinkStart) / 1000).toFixed(1);
-        latencies.push(parseFloat(lat));
-        const avg = (latencies.reduce((a,b)=>a+b,0)/latencies.length).toFixed(1);
-        document.getElementById("stat-latency").textContent = avg + "s";
-        thinkStart = null;
-      }
       exchanges++;
       document.getElementById("stat-exchanges").textContent = exchanges;
       addMessage("agent", msg.text);
       break;
 
+    case "metrics": {
+      latencies.push(msg.latency_ms / 1000);
+      const avg = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(1);
+      document.getElementById("stat-latency").textContent = avg + "s";
+      break;
+    }
+
+    case "tts_audio": {
+      const audio = new Audio(`data:${msg.mime};base64,${msg.data}`);
+      audio.play().catch(err => console.warn("TTS playback:", err));
+      break;
+    }
+
+    case "end":
+      setStatus("ENDED", false);
+      break;
+
     case "error":
       if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
-      addMessage("agent", "⚠ Error: " + msg.text);
+      addMessage("agent", "Error: " + msg.text);
       break;
+
+    default:
+      console.warn("Unknown message type:", msg.type);
   }
 }
 

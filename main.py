@@ -4,6 +4,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -24,15 +25,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("voicedesk")
 
-app = FastAPI(title="VoiceDesk AI")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 SPEECHMATICS_API_KEY = os.getenv("SPEECHMATICS_API_KEY", "YOUR_SPEECHMATICS_KEY")
 ANTHROPIC_API_KEY    = os.getenv("ANTHROPIC_API_KEY",    "YOUR_ANTHROPIC_KEY")
@@ -49,8 +41,8 @@ professionally, and helpfully. Rules:
 - Tone: warm, confident, solution-focused."""
 
 # ─── STARTUP VALIDATION ────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def validate_config():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     missing = []
     if ANTHROPIC_API_KEY == "YOUR_ANTHROPIC_KEY":
         missing.append("ANTHROPIC_API_KEY")
@@ -59,6 +51,16 @@ async def validate_config():
     if missing:
         raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
     logger.info("Config validated — all API keys present")
+    yield
+
+app = FastAPI(title="VoiceDesk AI", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def safe_task(coro):
@@ -84,9 +86,8 @@ async def ask_claude(conversation_history: list):
                     max_tokens=300,
                     system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                     messages=trim_history(conversation_history),
-                    cache_control={"type": "ephemeral"},
                 )
-        except (anthropic.RateLimitError, anthropic.InternalServerError):
+        except (anthropic.RateLimitError, anthropic.InternalServerError, anthropic.APIConnectionError):
             if attempt == 2:
                 raise
             await asyncio.sleep(2 ** attempt)
@@ -96,7 +97,7 @@ async def ask_claude(conversation_history: list):
 # ─── TTS ───────────────────────────────────────────────────────────────────────
 async def text_to_speech(text: str) -> bytes:
     async with asyncio.timeout(10):
-        async with TtsClient() as client:
+        async with TtsClient(api_key=SPEECHMATICS_API_KEY) as client:
             async with await client.generate(
                 text=text, voice=Voice.SARAH, output_format=OutputFormat.WAV_16000
             ) as resp:
@@ -210,7 +211,7 @@ async def voice_bridge(client_ws: WebSocket):
             except Exception:
                 pass
     except Exception as e:
-        logger.error(f"[{session_id}] fatal: {e}")
+        logger.error(f"[{session_id}] fatal: {e}", exc_info=True)
         try:
             await client_ws.send_json({"type": "error", "text": str(e)})
         except Exception:
