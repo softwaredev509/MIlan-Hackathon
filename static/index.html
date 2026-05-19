@@ -514,6 +514,76 @@
   #messages::-webkit-scrollbar { width: 4px; }
   #messages::-webkit-scrollbar-track { background: transparent; }
   #messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1024px) {
+    main { grid-template-columns: 280px 1fr; }
+  }
+
+  @media (max-width: 768px) {
+    body { font-size: 14px; }
+
+    header { padding: 12px 16px; }
+    .badge-vultr { display: none; }
+
+    main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      overflow: visible;
+    }
+
+    .panel-left {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .waveform-wrap { display: none; }
+
+    .mic-section {
+      flex-direction: row;
+      justify-content: center;
+      gap: 20px;
+      padding: 12px 16px;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .stat-value { font-size: 16px; }
+
+    .conv-header { padding: 12px 16px; }
+
+    #messages { padding: 12px; gap: 12px; }
+
+    .msg { max-width: 100%; }
+
+    .msg-bubble { max-width: calc(100vw - 90px); font-size: 13px; }
+
+    footer {
+      padding: 8px 12px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .logo-text { font-size: 15px; }
+
+    .status-pill { padding: 5px 10px; font-size: 10px; }
+
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+
+    .stat-value { font-size: 18px; }
+
+    #mic-btn { width: 64px; height: 64px; }
+
+    .msg-bubble { max-width: calc(100vw - 76px); }
+
+    .powered-label { display: none; }
+  }
 </style>
 </head>
 <body>
