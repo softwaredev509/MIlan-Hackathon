@@ -640,7 +640,7 @@ let thinkStart = null;
 let thinkingEl = null;
 
 // ── WS URL (same host) ─────────────────────────────────────────────────────────
-const WS_URL = `ws://${location.host}/ws/voice`;
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/voice`;
 
 // ── MIC TOGGLE ─────────────────────────────────────────────────────────────────
 async function toggleMic() {
